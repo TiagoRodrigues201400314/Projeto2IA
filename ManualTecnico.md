@@ -1,230 +1,317 @@
 # Manual Técnico
 
 ## Introdução
-Este manual técnico documenta o design, a implementação e a análise do programa de inteligência artificial para resolver a variante do problema do Passeio do Cavalo. O objetivo é fornecer uma visão detalhada do funcionamento interno do programa, incluindo os algoritmos utilizados, a estrutura de dados, as heurísticas implementadas e as limitações conhecidas.
+Este manual técnico documenta o design, a implementação e a análise do programa de inteligência artificial para a implementação do Jogo do Cavalo, em que é possivel jogar Humano Vs Computador ou Computador Vs Computador. O objetivo é fornecer uma visão detalhada do funcionamento interno do programa, incluindo os algoritmos utilizados, a estrutura de dados e as limitações conhecidas.
 
 ## Algoritmo Geral
 ### Descrição do Algoritmo
-#### Ficheiro Procura.lisp
+#### Ficheiro Algoritmo.lisp
 
-##### Esta função implementa a busca em largura. 
-Começa com um nó inicial, expande os nós sucessores que não foram visitados anteriormente, e continua a busca até encontrar uma solução ou esgotar todos os nós possíveis.
+##### Esta função cria um estado. 
+Cria um estado, sendo esse composto por:
+- Tabuleiro
+- Pontuação do jogador 1
+- Pontuação do jogador 2
 ```
-(defun bfs (no-inicial solucaop sucessores operadores &optional abertos fechados inicio-tempo total-nos)
-  (let ((inicio-tempo (or inicio-tempo (get-internal-real-time)))
-        (total-nos (or total-nos 0)))
-    (cond
-     ((null no-inicial) nil)
-     ((funcall solucaop (car no-inicial)) (let ((tempo-final (get-internal-real-time)))
-                                      (list (car (cons no-inicial fechados)) (length abertos) (length fechados)
-                                            (cond 
-                                             ((or (zerop (length abertos)) (null (nth 1 no-inicial))) 0)
-                                             (t (/ (or (nth 1 no-inicial) 0) (length abertos))))
-                                            (cond 
-                                             ((zerop (length fechados)) 0)
-                                             (t (/ total-nos (length fechados))))
-                                            (cond 
-                                             ((null inicio-tempo) 0)
-                                             (t (time-difference-milliseconds tempo-final inicio-tempo))))))
-     (t (let* ((fechados (cons no-inicial fechados))
-               (sucessores-no (remove nil (mapcar (lambda (x) (cond 
-                                                               ((or (no-existep x fechados) (no-existep x abertos)) NIL)
-                                                               ((null (car x)) NIL)
-                                                               (t x)))
-                                                  (funcall sucessores no-inicial operadores 'bfs))))
-               (abertos (abertos-bfs abertos sucessores-no))
-               (total-nos (+ total-nos (length sucessores-no))))
-          (bfs (car abertos) solucaop sucessores operadores (cdr abertos) fechados inicio-tempo total-nos)))))
+(defun cria-estado (tabuleiro)
+  "Cria um estado inicial para o jogo com o tabuleiro fornecido e pontuação zero para os dois jogadores."
+  (list tabuleiro 0 0)
 )
 ```
 
-##### Esta função calcula a diferença de tempo em milissegundos entre dois momentos.
+##### Esta função cria um estado. 
+Cria um nó, sendo esse composto por:
+- Estado
+- Profundidade
+- Nó pai
 ```
-(defun time-difference-milliseconds (end start)
-  "Calcula a diferença de tempo em milisegundos."
-  (* (- end start) 100)
+(defun cria-no (estado &optional (profundidade 0) (pai nil))
+  "Cria um nó no contexto do algoritmo de busca, contendo o estado do jogo, a profundidade atual na árvore de busca e o nó pai."
+  (list estado profundidade pai)
 )
 ```
 
-##### Esta função implementa a busca em profundidade.
-Inicia a busca a partir de um nó inicial, explorando até à profundidade passada em argumento ao longo de cada ramo antes de retroceder.
-```
-(defun dfs (no-inicial solucaop sucessores operadores profundidade &optional abertos fechados inicio-tempo total-nos)
-  (let ((inicio-tempo (or inicio-tempo (get-internal-real-time)))
-        (total-nos (or total-nos 0)))
-    (cond
-     ((null no-inicial) nil)
-     ((and (= (no-profundidade no-inicial) profundidade) (null abertos)) nil)
-     ((funcall solucaop (car no-inicial)) (let ((tempo-final (get-internal-real-time)))
-                                      (list (car (cons no-inicial fechados)) (length abertos) (length fechados)
-                                            (cond 
-                                             ((or (zerop (length abertos)) (null (nth 1 no-inicial))) 0)
-                                             (t (/ (or (nth 1 no-inicial) 0) (length abertos))))
-                                            (cond 
-                                             ((zerop (length fechados)) 0)
-                                             (t (/ total-nos (length fechados))))
-                                            (cond 
-                                             ((null inicio-tempo) 0)
-                                             (t (time-difference-milliseconds tempo-final inicio-tempo))))))
-     (t (let* ((fechados (cons no-inicial fechados))
-               (sucessores-no (remove nil (mapcar (lambda (x) (cond 
-                                                               ((or (no-existep x fechados) (no-existep x abertos)) NIL)
-                                                               ((null (car x)) NIL)
-                                                               (t x)))
-                                                  (funcall sucessores no-inicial operadores 'dfs profundidade))))
-               (abertos (abertos-dfs abertos sucessores-no))
-               (total-nos (+ total-nos (length sucessores-no))))
-          (dfs (car abertos) solucaop sucessores operadores profundidade (cdr abertos) fechados inicio-tempo total-nos))))))
-```
-##### Esta função implementa o algoritmo A*.
-É uma busca que utiliza uma função de custo que é a soma de um custo conhecido para alcançar o nó atual mais uma heurística que estima o custo de alcançar o objetivo a partir desse nó.
-```
-(defun astar (no-inicial solucaop sucessores operadores heuristica &optional abertos fechados inicio-tempo total-nos)
-  (let ((inicio-tempo (or inicio-tempo (get-internal-real-time)))
-        (total-nos (or total-nos 0)))
-  (cond 
-   ((null no-inicial) (format t "no null"))
-   ((funcall solucaop (car no-inicial)) (format t "yep"))
-     (t (let* ((fechados (cons no-inicial fechados))
-               (sucessores-no (remove nil (mapcar (lambda (x) (cond 
-                                                               ((or (no-existep x fechados) (no-existep x abertos)) NIL)
-                                                               ((null (car x)) NIL)
-                                                               (t x)))
-                                                  (sucessores-validos (funcall sucessores no-inicial operadores 'astar heuristica)))))
-               (abertos (abertos-astar abertos sucessores-no))
-               (total-nos (+ total-nos (length sucessores-no))))
-          (astar (car abertos) solucaop sucessores operadores heuristica (cdr abertos) fechados inicio-tempo total-nos)))))
-)
-```
-##### Esta função gera e retorna a lista de nós abertos para a busca em largura, anexando novos sucessores à lista de abertos.
-```
-(defun abertos-bfs (abertos sucessores)
-  (append abertos sucessores))
-```
-##### Esta função gera e retorna a lista de nós abertos para a busca em profundidade, colocando novos sucessores no início da lista de abertos.
-```
-(defun abertos-dfs (abertos sucessores)
-  (append sucessores abertos))
-```
-##### Esta função gera e retorna a lista de nós abertos para o algoritmo A*, ordenando os nós com base em uma função de custo composta pela soma do custo até agora e a heurística.
-```
-(defun abertos-astar (abertos sucessores)
-  (sort (append sucessores abertos) 'comparar-nos))
-```
-##### Esta função verifica se um nó existe em uma lista de nós.
-```
-(defun no-existep (no lista)
-   (not (null (find (no-estado no) (mapcar #'no-estado lista)))))
-```
-##### Esta função calcula o custo total de um nó, que é usado no algoritmo A* para ordenar os nós.
-```
-(defun no-custo (no)
-  (+ (nth 1 no) (nth 2 no)))
-```
-##### Esta função faz a comparação que determina a ordem dos nós na lista de abertos para o A* com base em seus custos totais.
-```
-(defun comparar-nos (a b)
-  (< (no-custo a) (no-custo b)))
-```
-##### Esta função gera um novo nó sucessor aplicando um operador ao estado do nó.
-```
-(defun novo-sucessor(no op)
-  (list (funcall op (car no)) (+ (no-profundidade no) 1) '0 no))
-```
-##### Similar a novo-sucessor, mas também calcula um valor heurístico para o novo nó.
-```
-(defun novo-sucessor-heuristica(no op heuristica)
-  (let ((sucessor (novo-sucessor no op)))
-        (list (no-estado sucessor) (no-profundidade sucessor) (funcall heuristica (no-estado no)) (no-pai sucessor))
-  )
-)
-```
-##### Esta função gera todos os nós sucessores de um nó dado, com base em uma lista de operações. Se o algoritmo for A*, também inclui cálculos heurísticos.
-```
-(defun sucessores(no oplist algoritmo &optional maxprofundidade heuristica)
-  (cond ((and (equal algoritmo 'dfs) (= maxprofundidade (no-profundidade no))) NIL)
-        ((equal algoritmo 'astar) (mapcar #'(lambda(func) (novo-sucessor-heuristica no func heuristica)) oplist))
-        (T (mapcar #'(lambda(func) (novo-sucessor no func)) oplist))
-  )
-)
-```
-##### Esta função retorna o estado atual de um nó.
+##### Esta função retorna o estado de um nó.
+Retorna o estado associado a um nó
 ```
 (defun no-estado(no)
-  (car no))
+  "Retorna o estado associado a um nó."
+  (car no)
+)
 ```
-##### Esta função cria um novo nó com um estado, um custo de caminho (g), uma heurística (h) e um nó pai.
-```
-(defun cria-no (estado &optional (g 0) (h 0) (pai nil))
-  (list estado g h pai))
-```
-##### Esta função retorna a profundidade de um nó, ou seja, o número de passos do nó inicial até o nó atual.
+
+##### Esta função retorna a profundidade de um nó.
+Retorna a profundidade de um nó na árvore de busca
 ```
 (defun no-profundidade (no)
-  (cadr no))
+  "Retorna a profundidade de um nó na árvore de busca."
+  (cadr no)
+)
+)
 ```
-##### Esta função retorna o nó pai de um nó dado, que é usado para rastrear o caminho de volta à solução.
+
+##### Esta função retorna o nó pai de um nó.
 ```
 (defun no-pai (no)
-  (caddr no))
+  "Retorna o nó pai de um dado nó."
+  (car (last no))
+)
 ```
 
-##### Esta função é outra heurística que calcula um valor baseado na proporção de espaços em uma tabela e no número de elementos nil na tabela.
+##### Esta função incrementa a profundidade de um nó
+Cria um novo nó com a profundidade incrementada em relação ao nó fornecido
 ```
-(defun heuristica-novo (estado)
+(defun incrementar-profundidade (no)
+  "Cria um novo nó com a profundidade incrementada em relação ao nó fornecido."
+  (list (no-estado no) (1+ (no-profundidade no)) (no-pai no))
+)
+```
+
+##### Esta função permite retornar um nó sucessor.
+Aplica um operador ao estado do nó para gerar um novo estado, incrementa a profundidade e retorna um novo nó sucessor
+```
+(defun novo-sucessor (no operador jogador)
+  "Aplica um operador ao estado do nó para gerar um novo estado, incrementa a profundidade e retorna um novo nó sucessor."
+  (let ((novo-estado (funcall operador (no-estado no) jogador)))
+    (cond 
+     ((null novo-estado) nil)
+     (t (cria-no novo-estado (1+ (no-profundidade no)) no))
+    ))
+)
+```
+
+##### Esta função retorna uma lista de sucessores
+Gera todos os nós sucessores aplicando uma lista de operadores ao estado do nó atual.
+```
+(defun sucessores (no lista-operadores jogador)
+  "Gera todos os nós sucessores aplicando uma lista de operadores ao estado do nó atual."
+  (cond 
+   ((null (no-estado no)) nil)
+   (t (remove nil (mapcar (lambda (operador) (novo-sucessor no operador jogador)) lista-operadores)))
+  )
+)
+```
+
+##### Esta função verifica se um nó já existe em uma lista de nós
+```
+(defun no-existep (no lista)
+   "Verifica se um nó já existe em uma lista de nós."
+   (not (null (find (no-estado no) (mapcar #'no-estado lista))))
+)
+```
+
+##### Esta função permite retornar o jogador oposto
+Muda o jogador atual para o outro jogador.
+```
+(defun outro-jogador (jogador)
+  "Muda o jogador atual para o outro jogador."
   (cond
-   ((or (null estado) (null (nth 2 estado)) (null (nth 1 estado)) (null (nth 0 estado))) 99999999)
-   (t (* (/ (contar-espacos-tabela (car estado))  100) (contar-null-tabela (car estado))))
-   )
+   ((eq jogador *jogador1*) *jogador2*)
+   (t *jogador1*)
+  )
 )
 ```
 
-##### Esta função corresponde à heuristica default.
+##### Esta função calcula a soma total de pontos que ainda estão no tabuleiro.
 ```
-(defun heuristica-default (estado)
+(defun pontos-no-tabuleiro (tabuleiro)
+  "Calcula a soma total de pontos que ainda estão no tabuleiro."
   (cond
-   ((or (null (nth 2 estado)) (null (nth 1 estado)) (null (nth 0 estado))) 0)
-   (t (/ (- (nth 2 estado) (nth 1 estado)) (media-espacos-tabela (nth 0 estado))))
-   )
+   ((null tabuleiro) 0)
+   ((or (equal (car tabuleiro) nil) (equal (car tabuleiro) -1) (equal (car tabuleiro) -2)) (pontos-no-tabuleiro (cdr tabuleiro)))
+   (t (+ (car tabuleiro) (pontos-no-tabuleiro (cdr tabuleiro))))
+  )
 )
 ```
 
-##### Esta é função calcula o valor heurístico de um nó com base em uma função heurística fornecida.
+##### Esta função conta o número total de casas disponíveis no tabuleiro.
 ```
-(defun calc-heuristica (heuristica no)
-  (funcall heuristica (no-estado no))
-)
-```
-#### Ficheiro Puzzle.lisp
-
-##### Esta função retorna a linha l do tabuleiro tab.
-```
-(defun linha (l tab)
-  (nth l tab)
+(defun casas-disponiveis (tabuleiro)
+  "Conta o número total de casas disponíveis no tabuleiro."
+  (cond
+   ((null tabuleiro) 0)
+   ((or (equal (car tabuleiro) nil) (equal (car tabuleiro) -1) (equal (car tabuleiro) -2)) (casas-disponiveis (cdr tabuleiro)))
+   (t (+ (casas-disponiveis (cdr tabuleiro)) 1))
+  )
 )
 ```
 
-##### Esta função retorna a célula na linha l e coluna c do tabuleiro tab.
+##### Esta função retorna a pontuação dos jogadores.
+Retorna a pontuação do jogador no estado dado.
 ```
-(defun celula (l c tab)
-  (nth c (linha l tab))  
+(defun pontos-jogador (estado jogador)
+  "Retorna a pontuação do jogador no estado dado."
+  (cond
+   ((eq jogador *jogador1*) (cadr estado))
+   (t (caddr estado))
+  )
 )
 ```
 
-##### Esta função calcula o número simétrico para um número dado número.
+##### Esta função calcula a diferença de pontos entre os jogadores.
+Calcula a diferença de pontos entre o jogador e o seu oponente no estado do nó.
+```
+(defun diferenca-pontos (no jogador)
+  "Calcula a diferença de pontos entre o jogador e o seu oponente no estado do nó."
+  (- (pontos-jogador (car no) jogador) (pontos-jogador (car no) (outro-jogador jogador)))
+)
+```
+
+##### Esta função é a função principal responsável pelo algoritmo Alfabeta.
+```
+(defun alfabeta (no jogador tempo-limite &optional (profundidade *profundidade*) (alfa -9999) (beta 9999) (tempo-final (+ (get-internal-real-time) tempo-limite)) (jogador-max jogador))
+  "Função principal do algoritmo Alfabeta"
+ (cond 
+  ((or (solucaop (car no) jogador)
+       (>= (no-profundidade no) profundidade)
+       (>= (get-internal-real-time) tempo-final)
+       (condicao-vitoria (car no))
+       (null no))
+   (diferenca-pontos no jogador))
+  (t (let ((sucessores (sucessores no (lista-movimentos (car no) jogador) jogador)))
+       (cond 
+        ((jogador-max jogador jogador-max) (progn
+                                             (setf *nos-expandidos* (+ *nos-expandidos* (length sucessores)))
+                                             (alfabeta-max sucessores jogador jogador-max tempo-limite profundidade alfa beta tempo-final)))
+        (t (progn 
+           (setf *nos-expandidos* (+ *nos-expandidos* (length sucessores)))
+           (alfabeta-min sucessores jogador jogador-max tempo-limite profundidade alfa beta tempo-final)))
+       )))
+ )
+)
+```
+
+##### Esta função é responsável por lidar com os nós MAX.
+```
+(defun alfabeta-max (sucessores jogador jogador-max tempo-limite profundidade alfa beta tempo-inicio)
+  "Função responsável por lidar com os nós MAX"
+  (cond 
+   ((or (null sucessores)) alfa)
+   (t (let* ((no-expandido (car sucessores))
+             (valor (alfabeta no-expandido (outro-jogador jogador) jogador-max tempo-limite profundidade alfa beta tempo-inicio))
+             (novo-alfa (max alfa valor)))
+        (cond 
+         ((>= novo-alfa beta) (setf *nos-cortados* (1+ *nos-cortados*)) beta)
+         (t (progn
+              (setf *jogada-pc* no-expandido)
+              (setf *nos-analisados* (1+ *nos-analisados*))
+              (max novo-alfa (alfabeta-max (cdr sucessores) jogador tempo-limite profundidade alfa beta tempo-inicio jogador-max))))
+        )))
+  )
+)
+```
+
+##### Esta função é responsável por lidar com os nós MIN.
+```
+(defun alfabeta-min (sucessores jogador jogador-max tempo-limite profundidade alfa beta tempo-inicio)
+  "Função responsável por lidar com os nós MIN"
+  (cond 
+   ((or (null sucessores)) beta)
+   (t (let* ((no-expandido (car sucessores))
+             (valor (alfabeta no-expandido (outro-jogador jogador) jogador-max tempo-limite profundidade alfa beta tempo-inicio))
+             (novo-beta (min beta valor)))
+        (cond
+         ((<= novo-beta alfa) (setf *nos-cortados* (1+ *nos-cortados*)) alfa)
+         (t (progn
+              (setf *jogada-pc* no-expandido)
+              (setf *nos-analisados* (1+ *nos-analisados*))
+              (min novo-beta (alfabeta-min (cdr sucessores) jogador jogador-max tempo-limite profundidade alfa beta tempo-inicio))))
+        )))
+  )
+)
+```
+
+#### Ficheiro Jogo.lisp
+
+##### Esta função gera uma lista sequencial de números de 0 até 99..
+```
+(defun gera-numeros (n)
+  "Gera uma lista sequencial de números de 0 até 99."
+  (cond
+   ((= n 100) nil)
+   (t (cons n (gera-numeros (1+ n))))
+  )
+)
+```
+
+##### Esta função embaralha aleatoriamente os elementos de uma lista.
+```
+(defun embaralha-lista (lista)
+  "Embaralha aleatoriamente os elementos de uma lista."
+  (cond 
+   ((null lista) nil)
+   (t (let ((rand-pos (random (length lista))))
+        (cons (nth rand-pos lista)
+              (embaralha-lista (remove (nth rand-pos lista) lista :count 1)))))
+  )
+)
+```
+
+##### Esta função particiona uma lista em sub-listas de um dado tamanho.
+```
+(defun particiona-lista (lista tamanho)
+  "Particiona uma lista em sub-listas de um dado tamanho."
+  (cond 
+   ((null lista) nil)
+   (t (cons (subseq lista 0 tamanho)
+            (particiona-lista (nthcdr tamanho lista) tamanho)))
+  )
+)
+```
+
+##### Esta função a ser chamada para criar tabuleiro aleatório.
+```
+(defun cria-tabuleiro ()
+  "Função a ser chamada para criar tabuleiro aleatório"
+  (particiona-lista (embaralha-lista (gera-numeros 0)) 10)
+)
+```
+
+##### Esta função retorna a posição da casa com a maior pontuação na linha.
+```
+(defun maior-pontuacao-na-linha (linha &optional coluna maior-pontuacao posicao-maior-pontuacao)
+  "Retorna a posição da casa com a maior pontuação na linha."
+  (cond 
+   ((null linha) posicao-maior-pontuacao)
+   ((or (null maior-pontuacao) (> (car linha) maior-pontuacao))
+    (maior-pontuacao-na-linha (cdr linha) (1+ coluna) (car linha) coluna))
+   (t (maior-pontuacao-na-linha (cdr linha) (1+ coluna) maior-pontuacao posicao-maior-pontuacao))
+  )
+)
+```
+
+##### Esta função coloca o cavalo na melhor posição da primeira ou última linha com base no jogador.
+```
+(defun primeira-jogada (estado jogador)
+  "Coloca o cavalo na melhor posição da primeira ou última linha com base no jogador."
+  (let* ((linha-escolhida (cond
+                           ((= jogador *jogador1*) (first (car estado)))
+                           (t (first (last (car estado))))
+                          ))
+         (melhor-posicao (maior-pontuacao-na-linha linha-escolhida 0 0 0)))
+    (insert-cavalo (cond 
+                    ((= jogador *jogador1*) 0)
+                    (t (- (length (car estado)) 1))
+                   ) melhor-posicao estado jogador))
+)
+```
+
+##### Esta função calcula o número simétrico.
 ```
 (defun numero-simetrico (numero)
   "Calcula o número simétrico."
   (cond 
-   ((and (numberp numero) (>= numero 10)) (let ((dezena (floor numero 10))
-                                                (unidade (mod numero 10)))
-                                            (+ (* unidade 10) dezena)))
+   ((and (numberp numero) 
+         (>= numero 10)) 
+    (let ((dezena (floor numero 10))
+          (unidade (mod numero 10)))
+      (+ (* unidade 10) dezena)))
    (t nil)
   )
 )
 ```
 
-##### Esta função encontra a posição de um número num no tabuleiro e substitui esse número por nil.
+##### Esta função encontra a posição de um número no tabuleiro e mete a NIL.
 ```
 (defun encontrar-posicao-numero (tabuleiro num)
   "Encontra a posição de um número no tabuleiro e mete a NIL"
@@ -237,7 +324,7 @@ Inicia a busca a partir de um nó inicial, explorando até à profundidade passa
 )
 ```
 
-##### Esta função verifica se um número é um duplo, de acordo com regras específicas do jogo.
+##### Esta função verifica se um número é um duplo.
 ```
 (defun numero-duplo (numero)
   "Verifica se um número é um duplo"
@@ -245,22 +332,58 @@ Inicia a busca a partir de um nó inicial, explorando até à profundidade passa
 )
 ```
 
-##### Esta função aplica a regra dos duplos no tabuleiro, chamando encontrar-posicao-numero para o maior duplo encontrado.
+##### Esta função coleta todos os números duplos do tabuleiro.
 ```
-(defun aplicar-regra-duplos (tabuleiro)
-  "Aplica a regra dos duplos no tabuleiro."
-   (encontrar-posicao-numero tabuleiro (encontrar-maior-duplo tabuleiro))
+(defun coletar-numeros-duplos (tabuleiro)
+  "Coleta todos os números duplos do tabuleiro."
+  (remove-if-not #'numero-duplo (flatten tabuleiro))
 )
 ```
 
-##### Esta função aplica a regra de número simétrico ou duplo e retorna o estado atualizado.
+##### Esta função transforma uma lista de listas em uma única lista.
 ```
-(defun aplicar-regra-simetrico-duplo (num estado)
-  "Aplica a regra do número simétrico ou do duplo e retorna o estado completo."
+(defun flatten (lista)
+  "Transforma uma lista de listas em uma única lista."
+  (cond 
+   ((null lista) nil)
+   (t (cond
+       ((listp (first lista)) (append (flatten (first lista)) (flatten (rest lista))))
+       (t (cons (first lista) (flatten (rest lista))))
+      ))
+  )
+)
+```
+
+##### Esta função aplica as regras de números simétricos e duplos ao estado do jogo para a jogada humano.
+```
+(defun aplicar-regra-simetrico-duplo (num estado jogador)
+  "Aplica as regras de números simétricos e duplos ao estado do jogo."
   (cond
-   ((numero-duplo num) (list (aplicar-regra-duplos (car estado)) (nth 1 estado) (nth 2 estado)))
+   ((numero-duplo num) (cond 
+                        ((eq *jogador1* jogador) (list (aplicar-regra-duplos (car estado)) (nth 1 estado) (nth 2 estado)))
+                        (t (list (aplicar-regra-duplos-computador (car estado)) (nth 1 estado) (nth 2 estado)))
+                       ))
    ((numero-simetrico num) (list (encontrar-posicao-numero (car estado) (numero-simetrico num)) (nth 1 estado) (nth 2 estado)))
    (t estado))
+)
+```
+
+##### Esta função aplica a regra do número simétrico ou do duplo e retorna o estado completo.
+```
+(defun aplicar-regra-simetrico-duplo-computador (num estado)
+  "Aplica a regra do número simétrico ou do duplo e retorna o estado completo."
+  (cond
+   ((numero-duplo num) (list (aplicar-regra-duplos-computador (car estado)) (nth 1 estado) (nth 2 estado)))
+   ((numero-simetrico num) (list (encontrar-posicao-numero (car estado) (numero-simetrico num)) (nth 1 estado) (nth 2 estado)))
+   (t estado))
+)
+```
+
+##### Esta função aplica a regra dos números duplos no tabuleiro para o computador.
+```
+(defun aplicar-regra-duplos-computador (tabuleiro)
+  "Aplica a regra dos números duplos no tabuleiro para o computador."
+   (encontrar-posicao-numero tabuleiro (encontrar-maior-duplo tabuleiro))
 )
 ```
 
@@ -280,7 +403,7 @@ Inicia a busca a partir de um nó inicial, explorando até à profundidade passa
 )
 ```
 
-##### Esta função verifica se uma posição (i, j) está dentro dos limites do tabuleiro.
+##### Esta função verifica se a posição i (linha) e j (coluna) está dentro do tabuleiro.
 ```
 (defun valida-posicao (i j)
   "Verifica se a posição está dentro do tabuleiro"
@@ -288,7 +411,7 @@ Inicia a busca a partir de um nó inicial, explorando até à profundidade passa
 )
 ```
 
-##### Esta função verifica se a casa na posição (i, j) do tabuleiro está vazia.
+##### Esta função verifica se a casa na posição (l, c) do tabuleiro contém um número.
 ```
 (defun casa-vazia (l c tabuleiro)
   "Verifica se a casa na posição (l, c) do tabuleiro contém um número."
@@ -296,87 +419,156 @@ Inicia a busca a partir de um nó inicial, explorando até à profundidade passa
 )
 ```
 
-##### Esta função verifica se uma jogada é válida, ou seja, se está dentro do tabuleiro e a casa está vazia.
+##### Esta função verifica todas as possibilidades de jogadas.
 ```
-(defun validacao-jogada (i j tabuleiro)
+(defun validacao-jogada (i j tabuleiro jogador)
   "Metodo que verifica todas as possibilidades"
   (cond
-   ((and (valida-posicao i j)(casa-vazia i j tabuleiro)) 'T)
+   ((and 
+     (valida-posicao i j)
+     (casa-vazia i j tabuleiro)
+     (casa-ameacada i j tabuleiro jogador)
+     (jogador-na-posicao i j tabuleiro)) 
+    'T)
    (t nil)
   )
 )
 ```
 
-##### Esta função move o cavalo para uma nova posição (i, j) no tabuleiro, aplicando as regras de movimento e atualizando o estado.
+##### Esta função verifica se a casa na posição (i, j) está ameaçada pelo adversário.
 ```
-(defun move-cavalo (i j estado &optional (cavalo 'T))
+(defun casa-ameacada (i j tabuleiro jogador)
+  "Verifica se a casa na posição (i, j) está ameaçada pelo adversário."
+  (let ((adversario (cond ((= jogador *jogador1*) *jogador2*) (t *jogador1*))))
+    (let ((posicao-adversario (posicao-cavalo tabuleiro adversario)))
+      (cond 
+       ((null posicao-adversario) t)
+       (t (let ((movimentos-possiveis '((2 1) (1 2) (-1 2) (-2 1) (-2 -1) (-1 -2) (1 -2) (2 -1))))
+            (cond 
+             ((some #'(lambda (mov)
+                        (let ((nova-pos-i (+ (first posicao-adversario) (first mov)))
+                              (nova-pos-j (+ (second posicao-adversario) (second mov))))
+                          (and (valida-posicao nova-pos-i nova-pos-j)
+                               (= nova-pos-i i)
+                               (= nova-pos-j j))))
+                    movimentos-possiveis)
+              nil)
+             (t t)
+            )))
+      )))
+)
+```
+
+##### Esta função verifica se algum jogador está na posição (i, j) do tabuleiro.
+```
+(defun jogador-na-posicao (i j tabuleiro)
+  "Verifica se algum jogador está na posição (i, j) do tabuleiro."
+  (let ((posicao (celula i j tabuleiro)))
+    (cond
+     ((or (eql posicao *jogador1*) (eql posicao *jogador2*)) nil)
+     (t t)
+    ))
+)
+```
+
+##### Esta função calcula e retorna uma lista de jogadas possíveis para o jogador.
+```
+(defun calcular-jogadas-possiveis (estado jogador)
+  "Calcula e retorna uma lista de jogadas possíveis para o jogador."
+  (let ((posicao-atual (posicao-cavalo (car estado) jogador))
+        (movimentos-possiveis '((2 1) (1 2) (-1 2) (-2 1) (-2 -1) (-1 -2) (1 -2) (2 -1))))
+    (remove-if-not #'(lambda (mov)
+                       (let ((nova-i (+ (first posicao-atual) (first mov)))
+                             (nova-j (+ (second posicao-atual) (second mov))))
+                         (validacao-jogada nova-i nova-j (car estado) jogador)))
+                   movimentos-possiveis))
+)
+```
+
+##### Esta função verifica se o cavalo do jogador pode se mover.
+```
+(defun cavalo-pode-mover (estado jogador)
+  "Verifica se o cavalo do jogador pode se mover."
+  (let ((posicao-cavalo (posicao-cavalo (car estado) jogador)))
+    (some #'(lambda (mov)
+              (let ((novo-i (+ (first posicao-cavalo) (first mov)))
+                    (novo-j (+ (second posicao-cavalo) (second mov))))
+                (validacao-jogada novo-i novo-j (car estado) jogador)))
+          '((2 1) (1 2) (-1 2) (-2 1) (-2 -1) (-1 -2) (1 -2) (2 -1))))
+)
+```
+
+##### Esta função verifica se ambos os cavalos não podem se mover.
+```
+(defun condicao-vitoria (estado)
+  "Verifica se ambos os cavalos não podem se mover."
+  (not (or (cavalo-pode-mover estado *jogador1*)
+           (cavalo-pode-mover estado *jogador2*)))
+)
+```
+
+##### Esta função move o cavalo no tabuleiro, aplicando as regras de movimentação.
+```
+(defun move-cavalo (i j estado jogador &optional (tipo-jogo 2))
   "Move o cavalo no tabuleiro, aplicando as regras de movimentação."
-  (let ((posicao-atual (posicao-cavalo (car estado) cavalo)))
+  (let ((posicao-atual (posicao-cavalo (car estado) jogador)))
     (cond 
      ((null posicao-atual) nil)
      (t (let* ((novo-i (+ (first posicao-atual) i))
-               (novo-j (+ (second posicao-atual) j)))
+               (novo-j (+ (second posicao-atual) j))
+               (novo-numero (celula novo-i novo-j (car estado)))
+               (tabuleiro-sem-cavalo (substituir (first posicao-atual) (second posicao-atual) (car estado) nil)))
           (cond 
-           ((validacao-jogada novo-i novo-j (car estado))
-            (let ((novo-numero (celula novo-i novo-j (car estado)))
-                  (tabuleiro-sem-cavalo (substituir (first posicao-atual) (second posicao-atual) (car estado) nil)))
-              (let ((novo-estado (list (substituir novo-i novo-j tabuleiro-sem-cavalo cavalo) (adicionar-pontuacao novo-i novo-j estado) (nth 2 estado))))
-                (aplicar-regra-simetrico-duplo novo-numero novo-estado))))
+           ((validacao-jogada novo-i novo-j (car estado) jogador)
+            (let ((novo-estado (atualizar-estado novo-i novo-j tabuleiro-sem-cavalo estado jogador novo-numero tipo-jogo)))
+              novo-estado))
            (t nil)
-           ))))))
+          )))
+    ))
+)
 ```
 
-##### Esta função insere o cavalo em uma posição (i, j) no tabuleiro se a jogada for válida.
+##### Esta função atualiza o estado do jogo após um movimento do cavalo.
 ```
-(defun insert-cavalo (i j tabuleiro &optional (cavalo 'T))
+(defun atualizar-estado (novo-i novo-j tabuleiro-sem-cavalo estado jogador novo-numero tipo-jogo)
+  "Atualiza o estado do jogo após um movimento do cavalo."
+  (let ((novo-tabuleiro (substituir novo-i novo-j tabuleiro-sem-cavalo jogador))
+        (nova-pontuacao (adicionar-pontuacao estado jogador novo-numero)))
+  (cond 
+   ((eq 2 tipo-jogo) (aplicar-regra-simetrico-duplo-computador novo-numero (list novo-tabuleiro (nth 1 nova-pontuacao) (nth 2 nova-pontuacao))))
+   (t (aplicar-regra-simetrico-duplo novo-numero (list novo-tabuleiro (nth 1 nova-pontuacao) (nth 2 nova-pontuacao)) jogador))
+  ))
+)
+```
+
+##### Esta função insere o cavalo no tabuleiro pela primeira vez."
+```
+(defun insert-cavalo (i j estado jogador &optional (tipo-jogo 1))
   "Move o cavalo no tabuleiro, aplicando as regras de movimentação."
   (cond 
-   ((validacao-jogada i j tabuleiro) (substituir i j tabuleiro cavalo))
+   ((validacao-jogada i j (car estado) jogador)
+    (let ((novo-numero (celula i j (car estado))))
+      (let ((novo-estado (atualizar-estado i j (car estado) estado jogador novo-numero tipo-jogo)))
+        novo-estado)))
    (t nil)
   )
 )
 ```
 
-##### Esta função adiciona a pontuação da célula (i, j) ao estado, se for um número.
-```
-(defun adicionar-pontuacao (i j estado)
-  (let ((valor (celula i j (car estado))))
-    (cond 
-     ((numberp valor) (+ (nth 1 estado) valor))
-      (t (nth 1 estado)))))
-```
-
-##### Esta função verifica se o estado atual é uma solução, comparando a pontuação acumulada com um valor de referência.
-```
-(defun solucaop (estado)
-  (cond
-    ((null (car estado)) nil)
-    ((or (null (objetivo estado)) (null (pontuacao estado))) nil)
-    ((cond
-       ((> (length estado) 3)
-        (cond
-         ((>= (nth 1 (car estado)) (nth 2 (car estado))) t)
-         (t nil))
-        )
-       (t
-        (cond
-         ((>= (nth 1 estado) (nth 2 estado)) t)
-         (t nil))
-        )))
-    (t nil)))
-```
-
-##### Esta função substitui o valor de uma célula (i, j) no tabuleiro com um novo valor.
+##### Esta função substitui o elemento na posição (i, j) do tabuleiro pelo valor fornecido.
 ```
 (defun substituir (i j tabuleiro &optional (valor nil))
+  "Substitui o elemento na posição (i, j) do tabuleiro pelo valor fornecido."
     (let ((linha (nth i tabuleiro)))
     (let ((nova-linha (substituir-linha j linha valor)))
-      (substituir-linha i tabuleiro nova-linha))))
+      (substituir-linha i tabuleiro nova-linha)))
+)
 ```
 
-##### Esta função é auxiliar de substituir, atualiza uma linha do tabuleiro com uma nova linha nova-linha.
+##### Esta função substitui a linha de índice especificado no tabuleiro pela nova linha fornecida.
 ```
 (defun substituir-linha (indice tabuleiro nova-linha)
+  "Substitui a linha de índice especificado no tabuleiro pela nova linha fornecida."
   (cond 
    ((null tabuleiro) nil)
    ((= indice 0) (cons nova-linha (cdr tabuleiro)))
@@ -385,143 +577,178 @@ Inicia a busca a partir de um nó inicial, explorando até à profundidade passa
 )
 ```
 
-##### Esta função encontra a posição atual do cavalo no tabuleiro.
+##### Esta função encontra qual a posição do cavalo.
 ```
-(defun posicao-cavalo (tabuleiro &optional (cavalo 'T))
+(defun posicao-cavalo (tabuleiro jogador)
   "Encontra qual a posição do cavalo"
   (labels ((aux (tab i j)
              (cond
                ((null tab) nil)
                ((null (car tab)) (aux (cdr tab) (1+ i) 0)) 
-               ((eql cavalo (caar tab)) (list i j)) 
+               ((eql jogador (caar tab)) (list i j)) 
                (t (aux (cons (cdr (car tab)) (cdr tab)) i (1+ j))))))
     (aux tabuleiro 0 0)
   )
 )
 ```
 
+##### Esta função adiciona o valor da célula (i, j) à pontuação do jogador especificado.
+```
+(defun adicionar-pontuacao (estado jogador novo-numero)
+  "Adiciona o valor da célula (i, j) à pontuação do jogador especificado."
+  (cond 
+   ((= jogador *jogador1*) (list (car estado) (+ (nth 1 estado) novo-numero) (nth 2 estado)))
+   ((= jogador *jogador2*) (list (car estado) (nth 1 estado) (+ (nth 2 estado) novo-numero)))
+   (t estado)
+  )
+)
+```
+
+##### Esta função determina se um estado de jogo é um estado solução para o jogador especificado.
+```
+(defun solucaop (estado jogador)
+  "Determina se um estado de jogo é um estado solução para o jogador especificado."
+  (cond 
+   ((eq (length (calcular-jogadas-possiveis estado jogador)) 0) T)
+   (t nil)
+  )
+)
+```
+
 ##### Estas funções movem o cavalo em todas as possíveis combinações de movimentos de cavalo no xadrez.
 ```
-(defun move-cavalo-2-1 (estado)
-  (funcall 'move-cavalo -2 -1 estado)
+(defun move-cavalo-2-1 (estado jogador)
+  "Movimenta o cavalo do jogador na direção (-2, -1) no estado do jogo."
+  (funcall 'move-cavalo -2 -1 estado jogador)
 )
 
-(defun move-cavalo-2_1 (estado)
-  (funcall 'move-cavalo -2 1 estado)
+(defun move-cavalo-2_1 (estado jogador)
+  "Movimenta o cavalo do jogador na direção (-2, 1) no estado do jogo."
+  (funcall 'move-cavalo -2 1 estado jogador)
 )
 
-(defun move-cavalo-1-2 (estado)
-  (funcall 'move-cavalo -1 -2 estado)
+(defun move-cavalo-1-2 (estado jogador)
+  "Movimenta o cavalo do jogador na direção (-1, -2) no estado do jogo."
+  (funcall 'move-cavalo -1 -2 estado jogador)
 )
 
-(defun move-cavalo-1_2 (estado)
-  (funcall 'move-cavalo -1 2 estado)
+(defun move-cavalo-1_2 (estado jogador)
+  "Movimenta o cavalo do jogador na direção (-1, 2) no estado do jogo."
+  (funcall 'move-cavalo -1 2 estado jogador)
 )
 
-(defun move-cavalo_1-2 (estado)
-  (funcall 'move-cavalo 1 -2 estado)
+(defun move-cavalo_1-2 (estado jogador)
+  "Movimenta o cavalo do jogador na direção (1, -2) no estado do jogo."
+  (funcall 'move-cavalo 1 -2 estado jogador)
 )
 
-(defun move-cavalo_1_2 (estado)
-  (funcall 'move-cavalo 1 2 estado)
+(defun move-cavalo_1_2 (estado jogador)
+  "Movimenta o cavalo do jogador na direção (1, 2) no estado do jogo."
+  (funcall 'move-cavalo 1 2 estado jogador)
 )
 
-(defun move-cavalo_2-1 (estado)
-  (funcall 'move-cavalo 2 -1 estado)
+(defun move-cavalo_2-1 (estado jogador)
+  "Movimenta o cavalo do jogador na direção (2, -1) no estado do jogo."
+  (funcall 'move-cavalo 2 -1 estado jogador)
 )
 
-(defun move-cavalo_2_1 (estado)
-  (funcall 'move-cavalo 2 1 estado)
+(defun move-cavalo_2_1 (estado jogador)
+  "Movimenta o cavalo do jogador na direção (2, 1) no estado do jogo."
+  (funcall 'move-cavalo 2 1 estado jogador)
 )
 ```
 
 ##### Esta função retorna uma lista de movimentos possíveis que o cavalo pode fazer.
 ```
-(defun lista-movimentos() 
-  (list 'move-cavalo_1_2 'move-cavalo_1-2 'move-cavalo-1_2 'move-cavalo-1-2 'move-cavalo_2_1 'move-cavalo_2-1 'move-cavalo-2_1 'move-cavalo-2-1)
+(defun lista-movimentos (estado jogador)
+  "Retorna uma lista de funções de movimento que são possíveis para o estado e jogador dados."
+  (let ((jogadas-possiveis (calcular-jogadas-possiveis estado jogador)))
+    (mapcar #'(lambda (mov)
+                (cond
+                  ((equal mov '(2 1)) 'move-cavalo_2_1)
+                  ((equal mov '(1 2)) 'move-cavalo_1_2)
+                  ((equal mov '(-1 2)) 'move-cavalo-1_2)
+                  ((equal mov '(-2 1)) 'move-cavalo-2_1)
+                  ((equal mov '(-2 -1)) 'move-cavalo-2-1)
+                  ((equal mov '(-1 -2)) 'move-cavalo-1-2)
+                  ((equal mov '(1 -2)) 'move-cavalo_1-2)
+                  ((equal mov '(2 -1)) 'move-cavalo_2-1)))
+            jogadas-possiveis))
 )
 ```
 
-##### Esta função retorna uma lista de operadores de movimento do cavalo a serem utilizados pelos algoritmos de busca.
+##### Esta função configura uma partida de jogo baseando-se no modo de jogo selecionado pelo jogador.
+É a partir desta função que se inicia o jogo.
 ```
-(defun operadores()
-  (list 'move-cavalo-2-1 'move-cavalo-2_1 'move-cavalo-1-2 'move-cavalo-1_2 'move-cavalo_1-2 'move-cavalo_1_2 'move-cavalo_2-1 'move-cavalo_2_1)
+(defun configurar-partida ()
+  "Configura uma partida de jogo baseando-se no modo de jogo selecionado pelo jogador."
+  (let ((modo-de-jogo (selecionar-modo-de-jogo)))
+    (cond 
+     ((eq modo-de-jogo 1) (iniciar-jogo 1 (tempo-limite 1) (quem-comeca)))
+     ((eq modo-de-jogo 2) (iniciar-jogo 2 (tempo-limite 2)))
+    ))
 )
 ```
 
-##### Esta função conta o número de elementos numéricos em uma lista. Ela ignora elementos que não são números.
+##### Esta função inicia o jogo com as configurações definidas, incluindo o modo de jogo e o limite de tempo.
 ```
-(defun contar-espacos-lista (lista)
+(defun iniciar-jogo (modo-de-jogo tempo-limite &optional (jogador-inicial *jogador1*))
+  "Inicia o jogo com as configurações definidas, incluindo o modo de jogo e o limite de tempo."
+  (let ((estado (cria-estado (cria-tabuleiro))))
+    (let ((estado-com-jogador1 (primeira-jogada estado *jogador1*)))
+      (let ((no-final (cria-no (primeira-jogada estado-com-jogador1 *jogador2*))))
+        (loop-jogo no-final jogador-inicial tempo-limite modo-de-jogo))))
+)
+```
+
+##### Esta função determina qual o vencedor do jogo.
+```
+(defun determinar-vencedor (estado)
+  "Determina o vencedor do jogo."
   (cond 
-   ((null lista) 0)
-   ((not (numberp (car lista))) 0)
-   (t (+ 1 (contar-espacos-lista (cdr lista))))
-   )
+   ((> (nth 1 estado) (nth 2 estado)) (format t "Jogador 1 venceu com ~A pontos!~%" (nth 1 estado)))
+   ((> (nth 2 estado) (nth 1 estado)) (format t "Jogador 2 venceu com ~A pontos!~%" (nth 2 estado)))
+   (t (format t "Empate!")))
 )
 ```
 
-##### Esta função conta o total de elementos numéricos em uma "tabela". Ela usa contar-espacos-lista para contar os elementos numéricos em cada lista interna e depois soma esses totais.
+##### Esta função aplica um movimento ao estado do jogo e retorna o novo estado.
 ```
-(defun contar-espacos-tabela (tabela)
-  (cond
-   ((null tabela) 0)
-   (t (apply #'+ (mapcar 'contar-espacos-lista tabela)))
-   )
+(defun aplicar-movimento (estado movimento-func jogador)
+  "Aplica um movimento ao estado do jogo e retorna o novo estado."
+  (let ((novo-estado (funcall movimento-func estado jogador)))
+    (cond 
+     (novo-estado novo-estado)
+     (t estado)
+    ))
 )
 ```
 
-##### Esta função calcula a soma dos elementos numéricos de uma lista. Assim como contar-espacos-lista, ignora elementos que não são números.
+##### Esta função verifica se o jogador é o jogador que está a fazer a jogada.
 ```
-(defun media-espacos-lista (lista)
-  (cond 
-   ((null lista) 0)
-   ((not (numberp (car lista))) 0)
-   (t (+ (car lista) (media-espacos-lista (cdr lista))))
-   )
+(defun jogador-max (jogador jogador-max)
+  "Verifica se o jogador é o jogador que está a fazer a jogada"
+  (eq jogador jogador-max)
 )
 ```
 
-##### Esta função calcula a média dos elementos numéricos em uma tabela. Soma todos os elementos numéricos de todas as listas internas e divide pelo número total de elementos numéricos.
+##### Esta função retorna o conteúdo da célula na posição (l, c) do tabuleiro.
 ```
-(defun media-espacos-tabela (tabela)
-  (cond
-   ((null tabela) 0)
-   (t (/ (apply #'+ (mapcar 'media-espacos-lista tabela)) (contar-espacos-tabela tabela)))
-   )
+(defun celula (l c tab)
+  "Retorna o conteúdo da célula na posição (l, c) do tabuleiro."
+  (nth c (linha l tab))  
 )
 ```
 
-##### Esta função conta o número de elementos nil em uma lista.
+##### Esta função retorna a linha de índice l do tabuleiro.
 ```
-(defun contar-null-lista (lista)
-  (cond 
-   ((null lista) 0)
-   ((not (null (car lista))) 0)
-   (t (+ 1 (contar-espacos-lista (cdr lista))))
-   )
+(defun linha (l tab)
+  "Retorna a linha de índice l do tabuleiro."
+  (nth l tab)
 )
 ```
 
-##### Esta função similar a contar-espacos-tabela, mas conta o número de elementos nil em uma tabela.
-```
-(defun contar-null-tabela (tabela)
-  (cond
-   ((null tabela) 0)
-   (t (apply #'+ (mapcar 'contar-null-lista tabela)))
-   )
-)
-```
-
-##### Esta é função genérica que aplica um algoritmo de busca ao tabuleiro usando operadores especificados.
-```
-(defun usar-algoritmo (tabuleiro algoritmo &optional profundidade heuristica)
-  (cond
-   ((equal algoritmo 'dfs) (funcall algoritmo (cria-no tabuleiro) 'solucaop 'sucessores (operadores) profundidade))
-   ((equal algoritmo 'bfs) (funcall algoritmo (cria-no tabuleiro) 'solucaop 'sucessores (operadores)))
-   (t (funcall algoritmo (cria-no tabuleiro) 'solucaop 'sucessores (operadores) heuristica))))
-```
-
-#### Ficheiro Projeto.lisp
+#### Ficheiro Interact.lisp
 
 ##### Esta função lê problemas de um arquivo. O arquivo parece conter vários problemas separados por linhas com "-----".
 ```
@@ -531,100 +758,115 @@ Inicia a busca a partir de um nó inicial, explorando até à profundidade passa
 )
 ```
 
-##### Esta é uma função auxiliar que lê as linhas do arquivo recursivamente e constrói uma lista de problemas.
+##### Esta função apresenta um ecrã que permite visualizar e selecionar o tipo de jogo.
 ```
-(defun ler-problemas-aux (stream &optional problemas problema-atual)
-  "Lê os dados do ficheiro"
-  (let ((linha (read-line stream nil nil)))
+(defun selecionar-modo-de-jogo ()
+  "Permite selecionar o tipo de jogo"
+  (format t "Escolha o modo de jogo:~%")
+  (format t "1. Humano vs Computador~%")
+  (format t "2. Computador vs Computador~%")
+  (let ((escolha (read)))
     (cond
-     ((null linha)
-      (cond 
-       (problema-atual (nreverse (push (nreverse problema-atual) problemas)))
-       (t problemas)
-      ))
-     ((string= linha "-----") (ler-problemas-aux stream (push (nreverse problema-atual) problemas) nil))
-     (t (ler-problemas-aux stream problemas (push linha problema-atual)))
-    ))
+     ((and (> escolha 0) (< escolha 3)) escolha)
+     (t (progn
+          (format t "Seleção inválida. Tente novamente.~%")
+          (selecionar-modo-de-jogo)))
+     ))
 )
 ```
 
-##### Esta função atribui letras (A, B, C, etc.) a cada problema lido do arquivo para fácil referência.
+##### Esta função apresenta um ecrã que permite selecionar quem começa o jogo.
 ```
-(defun mapear-problemas (problemas &optional (letras '("A" "B" "C" "D" "E" "F" "G")) mapeamento)
-  "Atribui letras aos dados recebidos"
+(defun quem-comeca ()
+  "Permite selecionar quem começa o jogo"
+  (format t "~%Escolha quem pretende que jogue primeiro:~%")
+  (format t "1. Você~%")
+  (format t "2. Computador~%")
+  (let ((escolha (read)))
+    (cond
+     ((eq 1 escolha) *jogador1*)
+     ((eq 2 escolha) *jogador2*)
+     (t (progn
+          (format t "Seleção inválida. Tente novamente.~%")
+          (quem-comeca)))
+     ))
+)
+```
+
+##### Esta função permite ao utilizador definir o tempo limite de jogo.
+```
+(defun tempo-limite (tipo-jogo)
+  "Permite ao utilizador definir o tempo limite de jogo"
+  (cond
+   ((eq tipo-jogo 1) (format t "~%Define o tempo limite de jogada do computador, de 1000MS a 5000MS:~%"))
+   (t (format t "Define o tempo limite do jogo, de 1000MS a 5000MS:~%"))
+  )
+  (let ((escolha (read)))
+    (cond
+     ((and (> escolha 999) (< escolha 5001)) escolha)
+     (t (progn
+          (format t "Seleção inválida. Tente novamente.~%")
+          (tempo-limite tipo-jogo)))
+     ))
+)
+```
+
+##### Esta função lista todas as jogadas possíveis.
+```
+(defun listar-jogadas (jogadas-possiveis indice)
+  "Lista as jogadas possíveis."
   (cond 
-   ((null problemas) (nreverse mapeamento)) ((null letras) (error "Não há letras suficientes para mapear os problemas."))
-   (t (mapear-problemas (cdr problemas) (cdr letras) (push (cons (car letras) (car problemas)) mapeamento)))
+   ((null jogadas-possiveis) nil)
+   (t (progn
+        (format t "~A: (~A, ~A)~%" indice (first (first jogadas-possiveis)) (second (first jogadas-possiveis)))
+        (listar-jogadas (rest jogadas-possiveis) (1+ indice))))
   )
 )
 ```
 
-##### Esta função solicita ao utilizador a localização do arquivo de problemas e permite que ele escolha um problema a ser carregado.
+##### Esta função permite ao jogador escolher uma das jogadas possíveis.
 ```
-(defun escolher-problema ()
-  (format t "Insira a localização do ficheiro problems.bat: ")
-  (let* ((localizacao (read-line))
-         (problemas (ler-problemas localizacao))
-         (mapeamento (mapear-problemas problemas)))
-    (format t "Escolha um problema (A-G):~%")
-    (listar-opcoes mapeamento)
-    (let ((escolha (string-upcase (read-line))))
-      (let ((resultado (obter-problema escolha mapeamento)))
-        (cond
-         (resultado (format t "Problema escolhido: ~D~%~%" escolha)
-                    (processar-escolha resultado))
-         (t (format t "Não foi possível encontrar o problema escolhido. Tente novamente.~%") (escolher-problema))
-        ))))
-)
-```
-
-##### Esta função inicia o jogo com o problema escolhido, pedindo ao usuário para posicionar o cavalo e imprimindo o tabuleiro inicial.
-```
-(defun iniciar-jogo (problema)
-  (let ((tabuleiro (cdr problema)))
-    (unless (listp (car tabuleiro)) (setf tabuleiro (read-from-string (princ-to-string tabuleiro))))
-    (format t "~%Em que casa, na linha 1, deseja colocar o cavalo? ")
-    (let ((posicao (parse-integer (read-line) :junk-allowed t)))
-      (cond 
-       ((and posicao (<= 1 posicao) (<= posicao 10)) (imprimir-tabuleiro (insert-cavalo 0 (1- posicao) tabuleiro)) tabuleiro)
-       (t (format t "Posição Inválida!~%") (iniciar-jogo problema))
-      )))
-)
-```
-
-##### Esta função busca um problema específico com base na escolha do usuário no mapeamento de problemas.
-```
-(defun obter-problema (escolha mapeamento)
-  "Isola o problema consoante a escolha do utilizador"
-  (let ((problema (assoc escolha mapeamento :test 'string-equal)))
+(defun escolher-jogada (jogadas-possiveis)
+  "Permite ao jogador escolher uma das jogadas possíveis."
+  (format t "~%Jogadas disponiveis:~%")
+  (listar-jogadas jogadas-possiveis 1)
+  (format t "Escolha uma jogada: ")
+  (let ((escolha (read)))
     (cond 
-     (problema (let ((tabuleiro (read-from-string (princ-to-string (cadr problema)))))
-                 (cons (car problema) tabuleiro)))
-     (t (format t "Opção inválida!") (escolher-problema))
+     ((and (integerp escolha) (<= escolha (length jogadas-possiveis)) (> escolha 0))
+      (nth (1- escolha) jogadas-possiveis))
+     (t (progn
+          (format t "Seleção inválida. Tente novamente.~%")
+          (escolher-jogada jogadas-possiveis)))
     ))
 )
 ```
 
-##### Esta função processa a escolha do problema pelo utilizador, imprimindo o tabuleiro atual e inicia o jogo.
+##### Esta função executa a jogada para um jogador humano.
 ```
-(defun processar-escolha (resultado)
-  (cond
-   (resultado 
-    (format t "Tabuleiro atual: ~%")
-    (imprimir-tabuleiro (cdr resultado))
-    (format t "Qual é o resultado máximo esperado?: ~%")
-    (let ((resultado-esperado (read)))
-      (iniciar-jogo (list (cdr resultado) '0 resultado-esperado))))
-   (t (format t "Não foi possível encontrar o problema escolhido. Tente novamente.") nil)))
+(defun jogada-humano (no jogador)
+  "Executa a jogada para um jogador humano."
+  (let ((jogadas-possiveis (calcular-jogadas-possiveis (car no) jogador)))
+    (imprime-tabuleiro (caar no))
+    (cond
+     ((null jogadas-possiveis) (progn (format t "~%Sem movimentos possíveis.~%") (car no)))
+     (t (let ((jogada-escolhida (escolher-jogada jogadas-possiveis)))
+          (cria-no (move-cavalo (first jogada-escolhida) (second jogada-escolhida) (car no) jogador 1) (cadr no) no)))
+    ))
+)
 ```
 
-##### Esta função lista os problemas disponíveis para o utilizador escolher.
+##### Esta função executa a jogada para um jogador computador.
 ```
-(defun listar-opcoes (mapeamento)
-  "Apresenta as opções ao utilizador"
-  (when mapeamento
-    (format t "~A - Problema ~A~%" (caar mapeamento) (caar mapeamento))
-    (listar-opcoes (cdr mapeamento)))
+(defun jogada-computador (no jogador tempo)
+  "Executa a jogada para um jogador computador"
+  (alfabeta no jogador tempo) 
+  ;(imprime-no *jogada-pc*)
+  (registrar-jogada  (caar *jogada-pc*) jogador)
+  (setf *nos-analisados* 0)
+  (setf *nos-expandidos* 0)
+  (setf *nos-cortados*   0)
+  *jogada-pc*
 )
 ```
 
@@ -634,171 +876,163 @@ Inicia a busca a partir de um nó inicial, explorando até à profundidade passa
   "Imprime uma linha do tabuleiro."
   (cond 
    ((null linha) (format t "~%"))
-   (t (format t "~A " (if (null (car linha)) "NIL" (car linha))) (imprimir-linha (cdr linha)))
-  )
+   (t (progn
+        (format t "~A " (cond ((null (car linha)) "NIL")
+                                    (t (car linha))))
+             (imprimir-linha (cdr linha))))
+   )
 )
 ```
 
-##### Esta função imprime o tabuleiro inteiro, linha por linha.
+##### Esta função insere uma mensagem e chama a função para imprimir o tabuleiro.
 ```
-(defun imprimir-tabuleiro (tabuleiro)
-  "Imprime o tabuleiro de forma recursiva."
+(defun imprime-tabuleiro (tabuleiro)
+  "Imprime o tabuleiro linha por linha."
+  (format t "~%Estado atual do tabuleiro:~%")
+  (imprime-tabuleiro-recursivamente tabuleiro)
+)
+```
+
+##### Esta função imprime o tabuleiro recursivamente.
+```
+(defun imprime-tabuleiro-recursivamente (tabuleiro)
+  "Imprime o tabuleiro recursivamente."
   (cond 
    ((null tabuleiro) nil)
-   (t (imprimir-linha (car tabuleiro)) (imprimir-tabuleiro (cdr tabuleiro)))
+   (t (progn
+        (imprimir-linha (car tabuleiro))
+        (imprime-tabuleiro-recursivamente (cdr tabuleiro))))
   )
 )
 ```
 
-##### Esta é a função principal que inicia o jogo, chama a função escolher-problema para carregar um problema e começar a jogar.
+##### Esta função executa o loop do jogo alternando entre os jogadores.
 ```
-(defun iniciar ()
-  "Inicia o jogo, permitindo ao usuário escolher a localização inicial do cavalo."
-  (let* ((tabuleiro (escolher-problema))
-         (algoritmo (ler-algoritmo))
-         (heuristica (cond
-                       ((eql algoritmo 'astar) (ler-heuristica))
-                       (t 'heuristica-default)))
-         (profundidade (cond
-                        ((eql algoritmo 'dfs) (ler-profundidade))
-                        (t 0)))
-         (solucao (usar-algoritmo tabuleiro algoritmo profundidade heuristica)))
-    (imprimir-tabuleiro (caar solucao))))
+(defun loop-jogo (no jogador tempo-limite &optional modo-de-jogo)
+  "Executa o loop do jogo alternando entre os jogadores."
+  (cond
+   ((eq modo-de-jogo 2) (loop-jogo-pc no jogador tempo-limite))
+   ((condicao-vitoria (car no)) (determinar-vencedor (car no)))
+   (t (let ((novo-no (cond
+                      ((eq jogador *jogador1*) (registrar-jogada-humano (jogada-humano no jogador)))
+                      (t (jogada-computador no jogador tempo-limite))))) 
+        (loop-jogo novo-no (outro-jogador jogador) tempo-limite)))
+  )
+)
 ```
 
-##### Esta função pede ao utilizador para escolher um algoritmo de busca.
-
+##### Esta função executa o loop do jogo alternando entre os jogadores computador.
 ```
-(defun ler-algoritmo ()
-  "Permite fazer a leitura do algoritmo a utilizar."
-  (progn
-    (format t "Que algoritmo quer usar para procurar? ~%")
-    (format t "1- Procura na largura ~%")
-    (format t "2- Procura na profundidade ~%")
-    (format t "3- Algoritmo A* ~%")
-    (let ((resposta (read)))
+(defun loop-jogo-pc (no jogador tempo-limite)
+  "Executa o loop do jogo alternando entre os jogadores"
+  (cond
+   ((condicao-vitoria (car no)) (determinar-vencedor (car no)))
+   (t (let ((novo-no (jogada-computador no jogador tempo-limite)))
+        (loop-jogo-pc novo-no (outro-jogador jogador) tempo-limite)))
+  )
+)
+```
+
+##### Esta função regista as jogadas efetuadas por um jogador computador para o ficheiro log.dat.
+```
+(defun registrar-jogada (tabuleiro jogador)
+  "Regista as jogadas efetuadas por um jogador computador para o ficheiro log.dat"
+  (let ((diretorio "C:/LispLogs/"))
+    (ensure-directories-exist diretorio)
+    (let ((caminho-arquivo (concatenate 'string diretorio "log.dat")))
+      (with-open-file (stream caminho-arquivo
+                              :direction :output
+                              :if-exists :append
+                              :if-does-not-exist :create)
+        (format stream "Jogador: ~A~%Tabuleiro: ~A~%Nós analisados: ~A~%Cortes: ~A~%~%" jogador tabuleiro *nos-analisados* *nos-cortados*))))
+)
+```
+
+##### Esta função regista as jogadas efetuadas por um jogador humano para o ficheiro log.dat.
+```
+(defun registrar-jogada-humano (no)
+  "Regista as jogadas efetuadas por um jogador humano para o ficheiro log.dat"
+  (let ((diretorio "C:/LispLogs/"))
+    (ensure-directories-exist diretorio)
+    (let ((caminho-arquivo (concatenate 'string diretorio "log.dat")))
+      (with-open-file (stream caminho-arquivo
+                              :direction :output
+                              :if-exists :append
+                              :if-does-not-exist :create)
+        (format stream "Jogador 1~%Tabuleiro: ~A~%~%" (caar no)))))
+  no
+)
+```
+
+##### Esta função apresenta todos os números duplos do tabuleiro e permite ao usuário escolher um.
+```
+(defun aplicar-regra-duplos (tabuleiro)
+  "Apresenta todos os números duplos do tabuleiro e permite ao usuário escolher um."
+  (let ((numeros-duplos (coletar-numeros-duplos tabuleiro)))
+    (format t "Números duplos encontrados: ~A~%" numeros-duplos)
+    (format t "Por favor, insira um número da lista ou pressione Enter para selecionar o maior: ")
+    (let ((entrada (read-line)))
       (cond 
-       ((= resposta 1) 'bfs)
-       ((= resposta 2) 'dfs)
-       (T 'astar)
+       ((string= entrada "") (aplicar-regra-duplos-computador tabuleiro))
+       (t (let ((escolha (parse-integer entrada :junk-allowed t)))
+            (cond 
+             ((find escolha numeros-duplos) (encontrar-posicao-numero tabuleiro escolha))
+             (t (encontrar-posicao-numero tabuleiro (reduce #'max numeros-duplos)))
+            )))
       )))
 )
 ```
 
-##### Esta função pede ao utilizador para escolher a heurística a utilizar no A*.
-
+##### Esta função de testes que umprime o resultado da jogada do computador.
 ```
-(defun ler-heuristica ()
-  "Permite fazer a leitura da heuristica a utilizar."
-  (format t "Que heuristica pretende utilizar? ~%")
-  (format t "1- Heuristica default ~%")
-  (format t "2- Heuristica nova ~%")
-  (let ((resposta (read)))  ; Declara resposta como uma variável local com let
-    (cond ((= resposta 1) 'heuristica-default)
-          (t 'heuristica-nova))))
-```
-
-##### Esta função pede ao utilizador a profundidade limite para o algoritmo de busca em profundidade.
-```
-(defun ler-profundidade()
-  "Permite fazer a leitura da profundidade limite para o algoritmo dfs."
-  (progn
-    (format t "Qual a profundidade limite? ~%")
-    (read))
+(defun imprime-no (jogada)
+  "Função de testes que umprime o resultado da jogada do computador"
+  (format t "Estado atual do nó:~%")
+  (imprime-tabuleiro (caar jogada))
+  (format t "Pontuação jogador 1: ~A~%" (pontos-jogador (car jogada) *jogador1*))
+  (format t "Pontuação jogador 2: ~A~%" (pontos-jogador (car jogada) *jogador2*))
+  (format t "Profundidade: ~A~%" (no-profundidade jogada))
+  (format t "Expandidos: ~A~%" *nos-expandidos*)
+  (format t "Cortados: ~A~%" *nos-cortados*)
+  (format t "Analisados ~A~%" *nos-analisados*)
 )
 ```
 
 ## Análise de Complexidade
 
-#### Busca em Largura (BFS):
-- O BFS explora todos os vértices e arestas em um grafo. No pior caso, todos os possíveis estados do tabuleiro (nós) serão explorados.
-- Complexidade de Tempo: O(B + E), onde B é o número de nós e E é o número de arestas no grafo do problema.
-
-#### Busca em Profundidade (DFS):
-- O DFS explora o grafo tão profundamente quanto possível, até ao limite pré-definido, antes de retroceder. No pior caso, também explora todos os vértices e arestas.
-- Complexidade de Tempo: O(V + E), onde V é o número de vértices (nós) e E é o número de arestas.
-
-#### A*:
-- O A* é mais eficiente do que o BFS e DFS puros porque usa heurísticas para guiar a busca, mas no pior caso, pode explorar muitos nós, especialmente se a heurística não for muito informativa.
-- Complexidade de Tempo: O(b^d), onde b é o fator de ramificação (número médio de sucessores por estado) e d é a profundidade da solução mais distante.
+#### Alfabeta:
+A complexidade do algoritmo minimax puro, é O(b^d), onde b é o fator de ramificação da árvore e d é a profundidade da árvore .
+Com a poda alfa-beta, a complexidade do tempo de pior caso ainda é O(b^d) porque, na pior situação, o algoritmo ainda precisaria examinar todos os nós. No entanto, a poda alfa-beta reduz significativamente o número de nós que precisam ser examinados. No melhor caso, o algoritmo tem uma complexidade de tempo de O(b^(d/2)), o que é uma melhoria exponencial. No caso médio, espera-se que o algoritmo tenha um desempenho em algum lugar entre o melhor e o pior caso, dependendo da eficácia da poda alfa-beta dada a ordem de avaliação dos nós e a disposição do espaço de busca do jogo.
+- Melhor caso: O(b^(d/2)).
+- Caso médio: Melhor que O(b^d), mas varia dependendo da eficácia da poda.
+- Pior caso: O(b^d)
 
 ### Complexidade de Espaço
 
-#### BFS:
-- O BFS precisa armazenar todos os nós que precisam ser explorados e todos os nós que já foram explorados.
-- Complexidade de Espaço: O(B), onde B é o número total de nós possíveis.
-
-#### DFS:
-- O DFS pode ser mais eficiente em termos de espaço do que o BFS, pois não precisa armazenar todos os nós de um nível antes de passar para o próximo.
-- Complexidade de Espaço: O(bm), onde b é o fator de ramificação e m é a profundidade máxima do grafo.
-
-#### A*:
-- Semelhante ao BFS em termos de espaço, pois pode precisar armazenar um grande número de nós, especialmente se a heurística não reduzir significativamente o espaço de busca.
-- Complexidade de Espaço: Pode ser O(b^d), mas depende da eficácia da heurística.
+#### Alfabeta:
+No algoritmo alfa-beta, a complexidade de espaço é linear em relação à profundidade da árvore. Isso ocorre porque, em qualquer momento durante a execução do algoritmo, é necessário armazenar apenas um único caminho da raiz até o nó atual na árvore, além de uma pequena quantidade de informação adicional para cada nó ao longo desse caminho (como os valores alfa e beta). Portanto, a complexidade de espaço do algoritmo alfa-beta é O(d), onde d é a profundidade da árvore de busca. Isso significa que a quantidade de memória necessária cresce linearmente com o número de movimentos à frente que o algoritmo está avaliando.
 
 ## Estrutura de Dados
 
 ### Listas
 Listas são usadas para representar uma variedade de coleções de dados, como:
 - Tabuleiros de Jogo: O tabuleiro do jogo pode ser representado como uma lista de listas, onde cada sublista representa uma linha do tabuleiro.
-- Estados Abertos e Fechados: Nos algoritmos de procura, listas são usadas para armazenar os estados abertos e fechados.
+- Nós: Um nó é composto por uma lista de listas.
 - Caminhos ou Sequências de Movimentos: Uma lista pode representar a sequência de movimentos que o cavalo faz no tabuleiro.
 
-A estrutura de dados utilizada foi as listas. Por exemplo, ler-problemas-aux cria uma lista de problemas lendo de um arquivo. A função move-cavalo e outras funções relacionadas manipulam estados para realizar movimentos no tabuleiro e calcular pontuações.
-
-## Heurísticas Implementadas
-Para este projeto foi apenas implementado a heurística A*, é uma parte crucial que determina a eficiência e eficácia do algoritmo na busca de soluções. 
-A heurística é uma função que estima o custo mais baixo do nó atual até o nó objetivo. Tenta prever o caminho mais curto ou custo mínimo para alcançar o objetivo a partir de um determinado ponto. 
-
-Características:
-- Estimativa de Custo para o Objetivo (h(n)): A função heurística h(n) estima o custo de ir do nó n até o nó objetivo. Esta estimativa deve ser tão precisa quanto possível para que o A* funcione de forma eficiente.
-- Admissibilidade: Uma heurística é dita admissível se nunca superestima o custo real de alcançar o objetivo.
-- Consistência: Uma heurística é consistente se, para cada nó n e cada sucessor n' de n, o custo estimado de chegar ao objetivo a partir de n não é maior que o custo de ir de n para n' mais o custo estimado de chegar ao objetivo a partir de n'.
+A estrutura de dados utilizada foi as listas. Por exemplo, criar um estado cria uma lista quer contem uma lista de listas (tabuleiro) e a pontuação dos jogadores. A função move-cavalo e outras funções relacionadas manipulam estados para realizar movimentos no tabuleiro e calcular pontuações.
 
 ## Limitações e Opções Técnicas
-Houve um número elevado de limitações durante o desenvolvimento do programa, como por exemplo o desenvolvimento de BFS e DFS, o A* não houve muitas dificuldades. Para tentar ultrapassar o maior número de limitações possíveis foi utilizado a pesquisa na internet, analisar os laboratórios que foram realizados nas aulas práticas e como último recurso foram feitos pedidos de ajuda ao professor de laboratório.
-O algoritmo A* não ficou funcional. Devido à limitação de tempo, não conseguimos descobrir o motivo dos erros e resolvê-los.
-Os algoritmos BFS e DFS estão a funcionar, mas quando se faz pelos comandos a partir do menu de iteração com o utilizador ele percorre o tabuleiro mas depois dá erro.
-
-## Análise Crítica dos Resultados
-O algoritmo BFS conseguiu em todos os casos de teste bem succedidos, foi mais rápido que o DFS, mesmo que em alguns casos o DFS tenha gerado menos nós. Logo, pelos dados que conseguimos obter o BFS foi mais eficiente que o DFS, conseguindo encontrar a melhor solução mais rápido. Não foi possivel fazer uma análise mais extensiva porque não conseguimos resolver os problemas E e F, e não conseguimos meter o algoritmo A* a funcionar.
-
-| Algoritmo | Problema | Tempo (Milisegundos) | Nós gerados |
-|-----------|----------|----------------------|-------------|
-| BFS | A | 1 | 2 |
-| BFS | B | 1 | 9 |
-| BFS | C | 1.07 | 15 |
-| BFS | D | 1 | 37 |
-| BFS | E | NIL | NIL |
-| BFS | F | NIL | NIL |
-| DFS | A | 1 | 2 |
-| DFS | B | 1 | 9 |
-| DFS | C | 1.15 | 13 |
-| DFS | D | 1.29 | 14 |
-| DFS | E | NIL | NIL |
-| DFS | F | NIL | NIL |
-| A* | A | NIL | NIL |
-| A* | B | NIL | NIL |
-| A* | C | NIL | NIL |
-| A* | D | NIL | NIL |
-| A* | E | NIL | NIL |
-| A* | F | NIL | NIL |
+Houve um número elevado de limitações durante o desenvolvimento do programa, essas limitações derivadas na dificuldade de implementação do algoritmo do minimax com cortes alfabeta. Para tentar ultrapassar o maior número de limitações possíveis foi utilizado a pesquisa na internet, analisar os laboratórios que foram realizados nas aulas práticas.
+O algoritmo e o restante código está a funcionar, mas por alguma razão, pela qual não foi possivel descobrir, quando o jogo está quase a terminar, deixa de fazer jogadas.
 
 ## Requisitos Não Implementados
-Os algoritmos DFS e BFS não conseguiram em nenhum dos testes efetuados conseguir resolver o problema.
-Não conseguimos meter o algoritmo A* a funcionar corretamente, devido a stack overflow.
-Não foi implementado mais nenhum algoritmo (referente ao bónus).
+Não foi feito a parte para poder participar no campeonato.
+E também não foi feito a ordenação dos nós.
 
 ## Conclusão
-
-Este projeto representou uma exploração profunda e prática dos algoritmos de busca em Inteligência Artificial, aplicados ao desafiador e clássico problema do Passeio do Cavalo em um tabuleiro de xadrez. Através da implementação dos algoritmos de Busca em Largura (BFS), Busca em Profundidade (DFS) e A*, foi possível investigar diferentes abordagens para resolver um problema de busca complexo e com múltiplas variantes.
-
-Principais conhecimentos novos e realizações:
-- Flexibilidade dos Algoritmos de Busca: O projeto demonstrou como diferentes algoritmos podem ser adaptados e aplicados a um problema específico. Cada algoritmo apresentou suas características únicas em termos de eficiência, profundidade de busca e capacidade de encontrar a solução ótima.
-- Importância das Heurísticas no A*: A implementação do A* destacou a importância crucial de uma heurística bem projetada. Foi observado que a eficiência do A* depende fortemente da qualidade da heurística usada, ressaltando o equilíbrio entre admissibilidade e disponibilidade de informação.
-- Desafios de Espaço e Tempo: Ficou evidente que a complexidade tanto em espaço quanto em tempo é um fator significativo nos algoritmos de busca. Enquanto o DFS mostrou-se mais eficiente em termos de espaço, o BFS e o A* foram mais eficazes em encontrar soluções completas, embora com maior consumo de memória.
-- Representação do Problema: A representação do tabuleiro e dos movimentos do cavalo em listas provou ser eficaz, permitindo a manipulação e avaliação dos estados do jogo de maneira intuitiva e flexível.
-- Conhecimentos sobre IA e Resolução de Problemas: O projeto foi uma oportunidade valiosa para entender melhor como a Inteligência Artificial pode ser aplicada na resolução de problemas complexos, não apenas em jogos, mas em uma variedade de contextos onde a procura e a otimização são necessárias.
-- Potencial para Futuras Explorações: O projeto abriu caminhos para investigações futuras, especialmente no aprimoramento de heurísticas para o A* e na exploração de outras variantes do problema do Passeio do Cavalo.
-
-Este projeto não só reforçou o conhecimento adquirido nas aulas dos algoritmos de busca e suas aplicações práticas, mas também destacou a importância da escolha e implementação de estratégias de busca adequadas de acordo com as características específicas do problema em questão.
+O projeto focado no "Jogo do Cavalo" proporcionou uma oportunidade valiosa para aplicar conceitos avançados de Inteligência Artificial e programação em Lisp, destacando-se a implementação do algoritmo AlfaBeta. Este algoritmo demonstrou ser uma escolha eficaz para a tomada de decisões estratégicas no jogo, permitindo ao computador competir de maneira eficiente contra um oponente humano ou outro computador.
+Ao longo do projeto, foram enfrentados diversos desafios, como a representação eficiente do tabuleiro e dos estados do jogo, a manipulação de listas em Lisp, e a implementação de estratégias de corte e avaliação de movimentos. A complexidade temporal e espacial do algoritmo AlfaBeta foi cuidadosamente analisada, garantindo que o programa fosse não apenas eficiente, mas também capaz de tomar decisões rápidas dentro do limite de tempo estabelecido.
+Através deste projeto, foi possível aprofundar o entendimento sobre a Teoria de Jogos e a aplicação de algoritmos de procura em espaço de estados. A implementação em Lisp permitiu explorar um paradigma de programação funcional, que se mostrou adequado para o problema em questão devido à sua capacidade de manipulação de listas e estruturas de dados complexas.
+A experiência adquirida neste projeto é inestimável, pois além de aprimorar habilidades técnicas, proporcionou uma visão prática de como a Inteligência Artificial pode ser aplicada em contextos de jogos e simulação. O sucesso do algoritmo AlfaBeta em realizar jogadas inteligentes e sua capacidade de adaptar-se a diferentes situações no jogo demonstraram o potencial da IA em ambientes dinâmicos e imprevisíveis.
+Em conclusão, este projeto foi um excelente exercício para a aplicação prática de conceitos de Inteligência Artificial, programação em Lisp e Teoria de Jogos, resultando em um programa capaz de jogar o "Jogo do Cavalo" de maneira eficiente e estratégica, tanto contra humanos quanto contra outros programas de computador.

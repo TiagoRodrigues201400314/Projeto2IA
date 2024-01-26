@@ -59,3 +59,16 @@ O processo se repete até que nenhum dos jogadores se consigam movimentar mais, 
 Para o modo de jogo Computador vs Computado, quando começar o jogo neste modo, terá que esperar um pouco e quando terminarem o jogo é apresentado a mensagem de quem ganhou.
 
 ![image](https://github.com/TiagoRodrigues201400314/Manual-de-Utilizador/assets/100838766/c29911fe-cb95-466d-94b6-b63598e69104)
+
+## Ficheiro de Logs
+
+Será criado um ficheiro log.dat na seguinte localização:
+```
+C:\LispLogs\
+```
+
+Esse ficheiro contem toda a informação das jogadas efetuadas.
+
+O ficheiro tem este formato:
+
+![image](https://github.com/TiagoRodrigues201400314/Projeto2IA/assets/100838766/3885e337-8ba4-4f2a-bef3-4c816dffc5c3)

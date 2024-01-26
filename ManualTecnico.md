@@ -161,23 +161,23 @@ Calcula a diferença de pontos entre o jogador e o seu oponente no estado do nó
 ```
 (defun alfabeta (no jogador tempo-limite &optional (profundidade *profundidade*) (alfa -9999) (beta 9999) (tempo-final (+ (get-internal-real-time) tempo-limite)) (jogador-max jogador))
   "Função principal do algoritmo Alfabeta"
- (cond 
-  ((or (solucaop (car no) jogador)
-       (>= (no-profundidade no) profundidade)
-       (>= (get-internal-real-time) tempo-final)
-       (condicao-vitoria (car no))
-       (null no))
-   (diferenca-pontos no jogador))
-  (t (let ((sucessores (sucessores no (lista-movimentos (car no) jogador) jogador)))
-       (cond 
-        ((jogador-max jogador jogador-max) (progn
-                                             (setf *nos-expandidos* (+ *nos-expandidos* (length sucessores)))
-                                             (alfabeta-max sucessores jogador jogador-max tempo-limite profundidade alfa beta tempo-final)))
-        (t (progn 
-           (setf *nos-expandidos* (+ *nos-expandidos* (length sucessores)))
-           (alfabeta-min sucessores jogador jogador-max tempo-limite profundidade alfa beta tempo-final)))
-       )))
- )
+  (cond 
+   ((or (solucaop (car no) jogador)
+        (>= (no-profundidade no) profundidade)
+        (>= (get-internal-real-time) tempo-final)
+        (condicao-vitoria (car no))
+        (null no))
+    (diferenca-pontos no jogador))
+   (t (let ((sucessores (ordenar-nos (sucessores no (lista-movimentos (car no) jogador) jogador) jogador)))
+        (cond 
+         ((jogador-max jogador jogador-max) (progn
+                                              (setf *nos-expandidos* (+ *nos-expandidos* (length sucessores)))
+                                              (alfabeta-max sucessores jogador jogador-max tempo-limite profundidade alfa beta tempo-final)))
+         (t (progn 
+              (setf *nos-expandidos* (+ *nos-expandidos* (length sucessores)))
+              (alfabeta-min sucessores jogador jogador-max tempo-limite profundidade alfa beta tempo-final)))
+        )))
+  )
 )
 ```
 
@@ -218,6 +218,27 @@ Calcula a diferença de pontos entre o jogador e o seu oponente no estado do nó
               (min novo-beta (alfabeta-min (cdr sucessores) jogador jogador-max tempo-limite profundidade alfa beta tempo-inicio))))
         )))
   )
+)
+```
+
+##### Esta função avalia um estado do jogo baseado na diferença do número de movimentos possíveis entre o jogador e o adversário.
+```
+(defun heuristica-no (estado jogador)
+  "Avalia um estado do jogo baseado na diferença do número de movimentos possíveis entre o jogador e o adversário."
+  (let ((movimentos-jogador (length (calcular-jogadas-possiveis estado jogador)))
+        (movimentos-oponente (length (calcular-jogadas-possiveis estado (outro-jogador jogador)))))
+    (- movimentos-jogador movimentos-oponente))
+)
+```
+
+##### Esta função ordena os nós na lista de nós com base na pontuação heurística de cada nó.
+```
+(defun ordenar-nos (lista-nos jogador)
+  "Ordena os nós na lista de nós com base na pontuação heurística de cada nó."
+  (sort (copy-list lista-nos) 
+        #'(lambda (no1 no2) 
+            (> (heuristica-no (car no1) jogador) 
+               (heuristica-no (car no2) jogador))))
 )
 ```
 
@@ -860,13 +881,10 @@ Calcula a diferença de pontos entre o jogador e o seu oponente no estado do nó
 ```
 (defun jogada-computador (no jogador tempo)
   "Executa a jogada para um jogador computador"
+  (setf *jogada-pc* no)
   (alfabeta no jogador tempo) 
   ;(imprime-no *jogada-pc*)
   (registrar-jogada  (caar *jogada-pc*) jogador)
-  (setf *nos-analisados* 0)
-  (setf *nos-expandidos* 0)
-  (setf *nos-cortados*   0)
-  *jogada-pc*
 )
 ```
 
@@ -927,8 +945,7 @@ Calcula a diferença de pontos entre o jogador e o seu oponente no estado do nó
   "Executa o loop do jogo alternando entre os jogadores"
   (cond
    ((condicao-vitoria (car no)) (determinar-vencedor (car no)))
-   (t (let ((novo-no (jogada-computador no jogador tempo-limite)))
-        (loop-jogo-pc novo-no (outro-jogador jogador) tempo-limite)))
+   (t (loop-jogo-pc (jogada-computador no jogador tempo-limite) (outro-jogador jogador) tempo-limite))
   )
 )
 ```
@@ -945,6 +962,10 @@ Calcula a diferença de pontos entre o jogador e o seu oponente no estado do nó
                               :if-exists :append
                               :if-does-not-exist :create)
         (format stream "Jogador: ~A~%Tabuleiro: ~A~%Nós analisados: ~A~%Cortes: ~A~%~%" jogador tabuleiro *nos-analisados* *nos-cortados*))))
+  (setf *nos-analisados* 0)
+  (setf *nos-expandidos* 0)
+  (setf *nos-cortados* 0)
+  *jogada-pc*
 )
 ```
 
@@ -1024,11 +1045,10 @@ A estrutura de dados utilizada foi as listas. Por exemplo, criar um estado cria 
 
 ## Limitações e Opções Técnicas
 Houve um número elevado de limitações durante o desenvolvimento do programa, essas limitações derivadas na dificuldade de implementação do algoritmo do minimax com cortes alfabeta. Para tentar ultrapassar o maior número de limitações possíveis foi utilizado a pesquisa na internet, analisar os laboratórios que foram realizados nas aulas práticas.
-O algoritmo e o restante código está a funcionar, mas por alguma razão, pela qual não foi possivel descobrir, quando o jogo está quase a terminar, deixa de fazer jogadas.
+No modo de jogo Computador vs Computador, não consegui descobrir o motivo de não conseguir terminar o jogo, os 2 jogadores fazem jogadas até uma certa etapa, posteriormente deixam de conseguir fazer jogadas, mas no modo Humano vs Computador, o algoritmo funciona conforme esperado.
 
 ## Requisitos Não Implementados
 Não foi feito a parte para poder participar no campeonato.
-E também não foi feito a ordenação dos nós.
 
 ## Conclusão
 O projeto focado no "Jogo do Cavalo" proporcionou uma oportunidade valiosa para aplicar conceitos avançados de Inteligência Artificial e programação em Lisp, destacando-se a implementação do algoritmo AlfaBeta. Este algoritmo demonstrou ser uma escolha eficaz para a tomada de decisões estratégicas no jogo, permitindo ao computador competir de maneira eficiente contra um oponente humano ou outro computador.
